@@ -127,15 +127,21 @@ def force_term_size(*, w=None, h=None):
 def clone_git(shell):
     c = get_challenge(3)
     repo_path = f"ssh://bandit{c}-git@localhost/home/bandit{c}-git/repo"
-    pwd = get_pass(c - 1)
 
     path = shell.system("mktemp -d").recvallS().strip().rstrip("/")
 
     try:
         proc = shell.system(f"cd {path}; git clone {repo_path}")
-        proc.sendline("yes")
-        proc.sendline(pwd)
+        auth_git(proc, c - 1)
 
         yield f"{path}/repo"
     except:
         shell.system(f"rm -fdr {path}")
+
+
+def auth_git(proc, c=None):
+    if c is None:
+        c = get_challenge(2) - 1
+
+    proc.sendline("yes")
+    proc.sendline(get_pass(c))
