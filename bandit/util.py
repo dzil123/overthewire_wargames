@@ -1,7 +1,6 @@
+import contextlib
 import importlib
 import inspect
-import logging
-import re
 
 import pwnlib
 from pwn import *
@@ -63,3 +62,62 @@ def open_ssh(password=None, c=None) -> pwnlib.tubes.ssh.ssh:
         password = get_pass(c - 1)
 
     return open_ssh_raw(c, password)
+
+
+def open_ssh_key() -> pwnlib.tubes.ssh.ssh:
+    c = get_challenge(2)
+    c_prev = c - 1
+
+    get_pass(c_prev)
+    return open_ssh_raw(c, keyfile=password(c_prev))
+
+
+def get_port() -> int:
+    return randint(40_000, 60_000)
+
+
+@contextlib.contextmanager
+def force_term_size(*, w=None, h=None):
+    old_height = term.height
+
+    def do_resize():
+        if w is not None:
+            term.width = term.term.width = w
+        if h is not None:
+            term.height = term.term.height = h
+
+            # this is copy pasted from pwnlib.term.term.update_geometry
+            # without it "AttributeError: 'Cell' object has no attribute 'end'"
+            cells = term.term.cells
+            if cells and cells[-1].end[0] < 0:
+                delta = min(old_height - h, 1 - cells[-1].end[0])
+                for cell in cells:
+                    cell.end = (cell.end[0] + delta, cell.end[1])
+                    cell.start = (cell.start[0] + delta, cell.start[1])
+
+    do_resize()
+
+    old_on_winch = term.term.on_winch
+
+    old_update_geometry = term.term.update_geometry
+    term.term.update_geometry = lambda: None
+
+    old_redraw = term.term.redraw
+    term.term.redraw = lambda: None
+
+    try:
+        term.term.on_winch = [do_resize] + old_on_winch[:]
+
+        for handler in term.term.on_winch:
+            handler()
+
+        term.term.handler_sigwinch(None, None)
+
+        yield
+    finally:
+        term.term.on_winch = old_on_winch
+
+        term.term.update_geometry = old_update_geometry
+        term.term.redraw = old_redraw
+
+        term.term.handler_sigwinch(None, None)
