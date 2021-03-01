@@ -124,19 +124,25 @@ def force_term_size(*, w=None, h=None):
 
 
 @contextlib.contextmanager
+def temp_dir(shell):
+    path = shell.system("mktemp -d").recvallS().strip().rstrip("/")
+
+    try:
+        yield path
+    finally:
+        shell.system(f"rm -fdr {path}")
+
+
+@contextlib.contextmanager
 def clone_git(shell):
     c = get_challenge(3)
     repo_path = f"ssh://bandit{c}-git@localhost/home/bandit{c}-git/repo"
 
-    path = shell.system("mktemp -d").recvallS().strip().rstrip("/")
-
-    try:
+    with temp_dir(shell) as path:
         proc = shell.system(f"cd {path}; git clone {repo_path}")
         auth_git(proc, c - 1)
 
         yield f"{path}/repo"
-    except:
-        shell.system(f"rm -fdr {path}")
 
 
 def auth_git(proc, c=None):
